@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create VPC for data export application environment.
+
+Parameters:
+  AppName:
+    Type: String
+  Env:
+    Type: String
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+      - Key: "Name"
+        Value: !Join [ "-", [ !Ref AppName, vpc, !Ref Env ]]
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Sub '10.0.0.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: "Name"
+          Value: !Join [ "-", [ !Ref AppName, public-sn1, !Ref Env ]]
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Sub '10.0.1.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: "Name"
+          Value: !Join [ "-", [ !Ref AppName, public-sn2, !Ref Env ]]
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Sub '10.0.2.0/24'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: !Join [ "-", [ !Ref AppName, private-sn1, !Ref Env ]]
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Sub '10.0.3.0/24'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: !Join [ "-", [ !Ref AppName, private-sn2, !Ref Env ]]
+
+  ## INTERNET GATEWAY
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value:  !Join [ "-", [ !Ref AppName, igw, !Ref Env ]]
+
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  ## PUBLIC ROUTING
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Name"
+          Value:  !Join [ "-", [ !Ref AppName, rt, !Ref Env ]]
+
+  InternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+
+  RouteTablePublicAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  RouteTablePublicAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  ## NAT GATEWAY
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: NatPublicIP
+    Properties: 
+      SubnetId: !Ref PublicSubnet1
+      AllocationId: !GetAtt NatPublicIP.AllocationId
+
+  ## ELASTIC IP
+  NatPublicIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPC
+    Properties:
+      Domain: vpc
+  
+  ## PRIVATE ROUTING
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+  
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+  
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+Outputs:
+
+  VPC:
+    Description: VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${Env}::VPC'
+
+  PublicSubnet1:
+    Description: 'Public Subnet 1 on AZ1'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${Env}::PublicSubnet1'
+
+  PublicSubnet2:
+    Description: 'Public Subnet 2 on AZ2'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${Env}::PublicSubnet2'
+
+  PrivateSubnet1:
+    Description: 'Private Subnet 1 on AZ1'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${Env}::PrivateSubnet1'
+
+  PrivateSubnet2:
+    Description: 'Private Subnet 2 on AZ2'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${Env}::PrivateSubnet2'
+

@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create roles and policies for ECS 
+
+Parameters:
+  AppName:
+    Type: String
+  Env:
+    Type: String
+
+Resources:
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Join [ "-", [ !Ref Env, !Ref AppName, "ECS-Role" ]]
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+                # ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                # ECS Autoscaling
+                - ecs:DescribeServices
+                - ecs:UpdateService
+                - cloudwatch:DeleteAlarms
+                - cloudwatch:DescribeAlarms
+                - cloudwatch:PutMetricAlarm
+              Resource: '*'
+
+Outputs:
+
+  ECSTaskExecutionRole:
+    Description: ECS Task Execution Role
+    Value: !GetAtt 'ECSTaskExecutionRole.Arn'
+    Export:
+      Name: !Sub '${Env}::ECSTaskExecutionRole'

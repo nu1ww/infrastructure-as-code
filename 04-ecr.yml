@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECR for ECS Service
+
+Parameters:
+  ServiceName:
+    Type: String
+  Env:
+    Type: String
+
+Resources:
+  Repo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${Env}-${ServiceName}'
+
+Outputs:    
+  RepoArn:
+    Description: 'Private ECR Arn for ECS Service'
+    Value: !GetAtt Repo.Arn
+    Export:
+      Name: !Sub '${Env}::RepoArn'
+  RepoUri:
+    Description: 'Private ECR Uri for ECS Service'
+    Value: !GetAtt Repo.RepositoryUri
+    Export:
+      Name: !Sub '${Env}::RepoUri'

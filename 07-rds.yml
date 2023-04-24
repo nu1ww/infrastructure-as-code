@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create a DB subnet group and MYSQL Database"
+
+Parameters:
+  Project:
+    Type: String
+
+  Env:
+    Type: String
+
+  MasterUsername:
+    Type: String
+    Description: The username for our database.
+  
+  MasterUserPassword:
+    Type: String
+    Description: The password for the database.
+    "NoEcho": true
+
+Resources:
+    EC2SecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            GroupDescription: "Database instances security group"
+            VpcId: 
+              Fn::ImportValue: !Sub '${Env}::VPC'
+            SecurityGroupIngress: 
+              - 
+                CidrIp: "10.0.0.0/16"
+                FromPort: 3306
+                IpProtocol: "tcp"
+                ToPort: 3306
+            SecurityGroupEgress: 
+              - 
+                CidrIp: "0.0.0.0/0"
+                IpProtocol: "-1"
+
+    RDSDBSubnetGroup:
+        Type: "AWS::RDS::DBSubnetGroup"
+        Properties:
+            DBSubnetGroupDescription: "Subnet Group for mySQL database"
+            DBSubnetGroupName: !Join [ "-", [!Ref AWS::Region, !Ref Project, !Ref Env , 'sub-grp']]
+            SubnetIds: 
+              - Fn::ImportValue: !Sub '${Env}::PrivateSubnet1'
+              - Fn::ImportValue: !Sub '${Env}::PrivateSubnet2'
+            Tags: 
+              - Key: Name
+                Value: !Join [ "-", [ !Ref Project, !Ref Env , 'db']]
+              - Key: Project
+                Value: !Ref Project
+              - Key: Environment
+                Value: !Ref Env
+
+    RDSDBInstance:
+        Type: AWS::RDS::DBInstance
+        Properties:
+            DBInstanceIdentifier: !Join [ "-", [!Ref Project, !Ref Env , 'db']]
+            AllocatedStorage: 20
+            DBInstanceClass: db.t2.micro
+            Engine: "MYSQL"
+            MasterUsername: !Ref MasterUsername
+            MasterUserPassword: !Ref MasterUserPassword
+            BackupRetentionPeriod: 7
+            MultiAZ: false
+            EngineVersion: 8.0.28
+            AutoMinorVersionUpgrade: true
+            PubliclyAccessible: false
+            StorageType: gp2
+            Port: 3306
+            StorageEncrypted: false
+            CopyTagsToSnapshot: true
+            EnableIAMDatabaseAuthentication: false
+            DBSubnetGroupName: !Ref RDSDBSubnetGroup
+            VPCSecurityGroups: 
+              - !Ref EC2SecurityGroup
+            MaxAllocatedStorage: 25
+
+            ## Extended Configurations
+            #DeletionProtection: true
+            #Iops: 10
+            #MonitoringInterval: 60
+            #EnablePerformanceInsights: true
+            #PerformanceInsightsRetentionPeriod: 7
+            #DBParameterGroupName: "mysql8.0"
+            #MonitoringRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role"
+            
+            Tags: 
+              - Key: Name
+                Value: !Join [ "-", [!Ref Project, !Ref Env , 'db']]
+              - Key: Project
+                Value: !Ref Project
+              - Key: Environment
+                Value: !Ref Env
+
+Outputs:
+  Cluster:
+    Description: The DB Cluster Name
+    Value: !Ref RDSDBInstance
+    
+  SubnetGroup:
+    Description: The db subnet group name 
+    Value: !Ref RDSDBSubnetGroup

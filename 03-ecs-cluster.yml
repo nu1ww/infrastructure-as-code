@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Container cluster on ECS, loadbalancer, security groups and cloudwatch
+
+Parameters:
+  AppName:
+    Type: String
+  Env:
+    Type: String
+
+Resources:
+  
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Join [ "-", [ !Ref AppName, cluster, !Ref Env ]]
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Join [ "-", [ !Ref AppName, elb, !Ref Env ]]
+      Subnets:
+        - Fn::ImportValue: !Sub '${Env}::PublicSubnet1'
+        - Fn::ImportValue: !Sub '${Env}::PublicSubnet2'
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DefaultTargetGroup
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for loadbalancer to services on ECS
+      VpcId: 
+        Fn::ImportValue: !Sub '${Env}::VPC'
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  DefaultTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: default
+      VpcId: 
+        Fn::ImportValue: !Sub '${Env}::VPC'
+      Protocol: 'HTTP'
+      Port: '80'  
+
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: 'apis'
+      RetentionInDays: 1
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup      
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${Env}::VPC'
+      GroupDescription: for ecs containers
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref 'LoadBalancerSecurityGroup'
+          IpProtocol: -1
+
+
+Outputs:
+  
+  Cluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${Env}::ECSCluster'
+
+  Listener:
+    Description: listener port 80
+    Value: !Ref LoadBalancerListener
+    Export:
+      Name: !Sub '${Env}::Listener'
+
+  ContainerSecurityGroup:
+    Description: container security group
+    Value: !Ref ContainerSecurityGroup
+    Export:
+      Name: !Sub '${Env}::ContainerSecurityGroup'
+
+  LoadBalancerDNS:
+    Description: Domain name for the loadbalancer
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub '${Env}::ALBDNSName'
+

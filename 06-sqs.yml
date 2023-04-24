@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 'SQS fifo queue for handle input messages'
+
+Parameters:
+  AppName:
+    Type: String
+  Env:
+    Type: String
+
+Resources:
+  MessageQueue: 
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: '${AppName}-${Env}-message-queue.fifo'
+      FifoQueue: true
+          
+Outputs:
+  FifoQueueURL:
+    Description: Message Queue URL
+    Value: !Ref MessageQueue
+    Export:
+      Name: !Sub '${Env}::FifoQueueURL'
+
+  FifoQueueArn:
+    Description: Message Queue Arn for FIFO queue
+    Value: !GetAtt MessageQueue.Arn
+    Export:
+      Name: !Sub '${Env}::FifoQueueArn'
